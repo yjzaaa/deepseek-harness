@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "插件生态：一切皆插件，互相平行",
+    "quality_profile": "showcase",
+    "viewBox": [1200, 520],
+    "repository": {
+      "url": "https://github.com/deepseek-ai/deepseek-harness",
+      "revision": "47f943859bef60e4160492346772ded9b24f765a"
+    }
+  },
+  "components": [
+    { "id": "tree", "type": "backend", "label": "插件树组合", "sublabel": "bundle → profile → patch", "pos": [60, 55], "size": [180, 60], "tag": "组合机制",
+      "sources": [
+        { "path": "packages/boot/app-boot/src/profile.ts", "line": 2, "label": "Profile 发现与 patch 层组合" }
+      ] },
+    { "id": "loader", "type": "backend", "label": "loader", "sublabel": "挂载成插件树", "pos": [60, 175], "size": [180, 60],
+      "sources": [
+        { "path": "vendor/cordis/src/registry.ts", "line": 222, "label": "resolve(): 函数/类/{apply} 三形态" }
+      ] },
+    { "id": "core", "type": "backend", "label": "核心插件", "sublabel": "agent-loop/system-prompt/tools/session", "pos": [340, 115], "size": [180, 60], "tag": "平行插件",
+      "sources": [
+        { "path": "packages/core/agent-loop/src/agent.ts", "line": 84, "label": "Agent 出生:收件箱/轮次号/作用域" }
+      ] },
+    { "id": "entry", "type": "frontend", "label": "入口插件", "sublabel": "CLI/Web/ACP", "pos": [620, 115], "size": [180, 60], "tag": "平行插件" },
+    { "id": "capability", "type": "cloud", "label": "能力插件", "sublabel": "LLM/Shell/FS/Subagent", "pos": [900, 115], "size": [180, 60], "tag": "平行插件",
+      "sources": [
+        { "path": "packages/shell/shell/src/index.ts", "line": 1, "label": "Service Definition for ctx.shell" }
+      ] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "组合机制:bundle → profile → patch → loader", "wraps": ["tree", "loader"] },
+    { "kind": "region", "label": "平行插件:核心/入口/能力,没有谁比谁更核心", "wraps": ["core", "entry", "capability"] }
+  ],
+  "connections": [
+    { "id": "tree-loader", "from": "tree", "to": "loader", "label": "组合", "variant": "emphasis", "labelAt": [150, 129] },
+    { "id": "loader-core", "from": "loader", "to": "core", "label": "挂载", "variant": "emphasis" },
+    { "id": "loader-entry", "from": "loader", "to": "entry", "label": "挂载", "variant": "dashed" },
+    { "id": "loader-capability", "from": "loader", "to": "capability", "label": "挂载", "variant": "dashed" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "插件树组合", "items": ["最底层:dsh-base 基础组合包", "第二层:web 或 headless 运行方式", "最上层:用户 patch 整行替换", "loader 把最终配置挂载成插件树"] },
+    { "dot": "violet", "title": "一切皆插件", "items": ["核心插件:agent-loop/system-prompt/tools/session", "入口插件:CLI/Web/ACP", "能力插件:LLM/Shell/FS/Subagent"] },
+    { "dot": "amber", "title": "互相平行", "items": ["没有谁比谁更核心", "agent-loop 只是 packages/core/agent-loop", "整个产品本身就是插件组合出来的"] }
+  ]
+}

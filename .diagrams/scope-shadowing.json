@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "作用域与同名遮蔽：两层查找",
+    "quality_profile": "showcase",
+    "viewBox": [1080, 520],
+    "repository": {
+      "url": "https://github.com/deepseek-ai/deepseek-harness",
+      "revision": "47f943859bef60e4160492346772ded9b24f765a"
+    }
+  },
+  "components": [
+    { "id": "global", "type": "backend", "label": "global 层", "sublabel": "全局注册表", "pos": [60, 115], "size": [180, 60], "tag": "两层" },
+    { "id": "agentctx", "type": "backend", "label": "agent.ctx 层", "sublabel": "专属作用域", "pos": [340, 115], "size": [180, 60], "tag": "两层",
+      "sources": [
+        { "path": "packages/core/scope/src/index.ts", "line": 137, "label": "createScope:键是 Agent 对象身份" }
+      ] },
+    { "id": "shadow", "type": "external", "label": "同名遮蔽", "sublabel": "专属层挡住全局层", "pos": [620, 115], "size": [180, 60] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "专属层优先,同名遮蔽全局层;遮蔽是视角性的,其他 Agent 看到原装", "wraps": ["global", "agentctx", "shadow"] }
+  ],
+  "connections": [
+    { "id": "agentctx-global", "from": "agentctx", "to": "global", "label": "就近查找", "variant": "emphasis", "labelAt": [250, 189] },
+    { "id": "agentctx-shadow", "from": "agentctx", "to": "shadow", "label": "遮蔽", "variant": "dashed", "labelAt": [530, 189] }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "两层查找", "items": ["专属层(agent.ctx)优先查找", "同名遮蔽全局层", "其余照常可用"] },
+    { "dot": "violet", "title": "遮蔽是视角性的", "items": ["其他 Agent 看到的仍是原装", "preset 声明 Agent 由哪些插件构成", "isolate 为该 Agent 单独立服务实例"] },
+    { "dot": "amber", "title": "克制点", "items": ["只有两层,没有更深嵌套", "机制给到刚好,多余自由度不给"] }
+  ]
+}

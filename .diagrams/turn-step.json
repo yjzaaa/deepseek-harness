@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "Turn / Step 执行周期:一次输入如何变成一次回复",
+    "quality_profile": "showcase",
+    "viewBox": [1080, 660]
+  },
+  "participants": [
+    { "id": "user", "type": "frontend", "label": "用户/CLI" },
+    { "id": "inbox", "type": "backend", "label": "收件箱" },
+    { "id": "loop", "type": "backend", "label": "agent-loop" },
+    { "id": "prompt", "type": "backend", "label": "system-prompt" },
+    { "id": "tools", "type": "backend", "label": "core/tools" },
+    { "id": "llm", "type": "external", "label": "DeepSeek API" },
+    { "id": "log", "type": "database", "label": "会话日志" }
+  ],
+  "messages": [
+    { "from": "user", "to": "inbox", "y": 170, "label": "发送消息(用户消息才唤醒驱动)", "variant": "emphasis" },
+    { "from": "loop", "to": "inbox", "y": 214, "label": "认领输入(注入材料随下条消息带走)" },
+    { "from": "loop", "to": "log", "y": 258, "label": "turn/start —— 被拒的空 Turn 也入日志" },
+    { "from": "loop", "to": "prompt", "y": 302, "label": "装配提示词分节 + 工具清单(按 Agent 视角解析)", "variant": "dashed" },
+    { "from": "loop", "to": "llm", "y": 346, "label": "step/start → agent/request → llm/stream 两条 waterfall", "variant": "emphasis" },
+    { "from": "llm", "to": "loop", "y": 398, "label": "assistant/chunk 流式分片 → 逐条落盘", "variant": "return" },
+    { "from": "loop", "to": "tools", "y": 442, "label": "tool/call 先进日志 → tools/* 三道关口", "variant": "emphasis" },
+    { "from": "tools", "to": "loop", "y": 494, "label": "tool/result 落盘,step/end", "variant": "return", "note": "还需接力或收件箱有新输入 → 再开一个 Step" },
+    { "from": "loop", "to": "log", "y": 530, "label": "agent/turn-stopping 全票通过 → turn/end", "note": "serial 模式:任何一票说不,回合继续" },
+    { "from": "loop", "to": "user", "y": 570, "label": "回复(界面逐事件回放自日志)", "variant": "return" }
+  ],
+  "activations": [
+    { "participant": "loop", "from": 170, "to": 570 }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "两个单位", "items": ["Step = 一次模型请求 + 全部工具调用", "Turn = 零或多个 Step,不欠回复即收口"] },
+    { "dot": "violet", "title": "事实与策略分层", "items": ["turn/step 开合是耐久事件进日志", "请求/流式/工具中转挂 waterfall", "循环极薄,策略全在外围插件"] },
+    { "dot": "amber", "title": "Inbox 三种动作", "items": ["follow up:后续任务,唤醒 agent", "steer:当前工作补充指令,唤醒 agent", "inject:静默注入,不唤醒,随下条消息带走"] },
+    { "dot": "rose", "title": "PRESTEP 每步重组", "items": ["不是启动时一次组装", "权限/工具/人格变化即时生效", "拒绝输入也留完整 turn 边界"] }
+  ]
+}

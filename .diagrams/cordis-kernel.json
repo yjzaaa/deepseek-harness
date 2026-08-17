@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Cordis 内核：六个基本概念如何协作",
+    "quality_profile": "showcase",
+    "viewBox": [1080, 470],
+    "repository": {
+      "url": "https://github.com/deepseek-ai/deepseek-harness",
+      "revision": "47f943859bef60e4160492346772ded9b24f765a"
+    }
+  },
+  "components": [
+    { "id": "bundle", "type": "external", "label": "bundle / profile", "sublabel": "组合配置行,决定装什么", "pos": [40, 55], "size": [150, 60],
+      "sources": [
+        { "path": "packages/bundle/web-app/cordis.patch.yml", "line": 1, "label": "patch 按 id 覆盖基础行" },
+        { "path": "packages/boot/app-boot/src/profile.ts", "line": 2, "label": "profile 发现与叠加" }
+      ] },
+    { "id": "loader", "type": "backend", "label": "loader", "sublabel": "把最终配置挂载成插件树", "pos": [40, 185], "size": [150, 60],
+      "sources": [
+        { "path": "vendor/cordis/src/registry.ts", "line": 222, "label": "resolve(): 函数/类/{apply} 三形态" }
+      ] },
+    { "id": "plugin", "type": "backend", "label": "plugin", "sublabel": "挂载单元:函数 · {apply} · Service 类", "pos": [250, 185], "size": [160, 60],
+      "sources": [
+        { "path": "vendor/cordis/src/registry.ts", "line": 130, "label": "{ apply(ctx, config) } 对象插件" },
+        { "path": "vendor/cordis/src/registry.ts", "line": 9, "label": "isApplicable 判定" }
+      ] },
+    { "id": "ctx", "type": "backend", "label": "context (ctx)", "sublabel": "Proxy:服务解析 · 事件 · 效果 · 子插件", "pos": [480, 185], "size": [170, 60], "tag": "核心",
+      "sources": [
+        { "path": "vendor/cordis/src/context.ts", "line": 42, "label": "class Context 是 Proxy" },
+        { "path": "vendor/cordis/src/context.ts", "line": 70, "label": "构造时安装内建服务" }
+      ] },
+    { "id": "events", "type": "backend", "label": "typed events", "sublabel": "emit / parallel / serial / waterfall", "pos": [710, 185], "size": [160, 60],
+      "sources": [
+        { "path": "vendor/cordis/src/events.ts", "line": 32, "label": "DispatchMode 五种分发" },
+        { "path": "vendor/cordis/src/events.ts", "line": 86, "label": "waterfall 签名" }
+      ] },
+    { "id": "guard", "type": "external", "label": "策略插件", "sublabel": "权限/审批/超时/遥测", "pos": [920, 185], "size": [140, 60],
+      "sources": [
+        { "path": "packages/guard/timeout-policy/src/index.ts", "line": 56, "label": "ctx.on('tools/execute') 超时守卫" }
+      ] },
+    { "id": "fiber", "type": "backend", "label": "fiber", "sublabel": "pending→active→unloading→disposed", "pos": [250, 330], "size": [160, 60],
+      "sources": [
+        { "path": "vendor/cordis/src/fiber.ts", "line": 184, "label": "class Fiber 运行状态载体" },
+        { "path": "vendor/cordis/src/fiber.ts", "line": 431, "label": "disposables 逆序撤销" }
+      ] },
+    { "id": "service", "type": "backend", "label": "service", "sublabel": "稳定名称发布能力 ctx.tools/llm", "pos": [480, 330], "size": [170, 60],
+      "sources": [
+        { "path": "vendor/cordis/src/service.ts", "line": 42, "label": "构造即注册,fiber 卸载即消失" }
+      ] },
+    { "id": "inject", "type": "backend", "label": "inject", "sublabel": "持续跟踪依赖的存在状态", "pos": [710, 330], "size": [160, 60],
+      "sources": [
+        { "path": "vendor/cordis/src/fiber.ts", "line": 238, "label": "inject 写入 intercept 解析表" },
+        { "path": "vendor/cordis/src/registry.ts", "line": 40, "label": "inject 声明的贡献机制" }
+      ] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "Cordis 运行时 vendor/cordis(与 agent 领域无关,不做消息/工具/持久化)", "wraps": ["loader", "plugin", "ctx", "events", "fiber", "service", "inject"] }
+  ],
+  "connections": [
+    { "id": "bundle-loader", "from": "bundle", "to": "loader", "label": "配置行", "variant": "dashed", "labelDy": 24 },
+    { "id": "loader-plugin", "from": "loader", "to": "plugin", "label": "ctx.plugin() 挂载", "labelAt": [220, 262] },
+    { "id": "plugin-ctx", "from": "plugin", "to": "ctx", "label": "apply(ctx) 统一入口", "variant": "emphasis", "labelAt": [445, 259] },
+    { "id": "ctx-events", "from": "ctx", "to": "events", "label": "on / emit / waterfall", "labelAt": [745, 259] },
+    { "id": "guard-events", "from": "guard", "to": "events", "label": "策略挂链", "variant": "dashed", "labelAt": [895, 259] },
+    { "id": "plugin-fiber", "from": "plugin", "to": "fiber", "label": "承载运行状态", "labelAt": [344, 259] },
+    { "id": "ctx-service", "from": "ctx", "to": "service", "label": "按名发布/查找", "labelDy": 24 },
+    { "id": "ctx-inject", "from": "ctx", "to": "inject", "label": "依赖解析", "labelDx": 10 },
+    { "id": "inject-service", "from": "inject", "to": "service", "label": "跟踪服务出现/消失", "fromSide": "left", "toSide": "right", "labelAt": [680, 404] }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "六个名词一条链", "items": ["plugin 挂载单元 · ctx 协作路口", "service 共享能力 · inject 依赖跟踪", "fiber 生命周期 · events 扩展点"] },
+    { "dot": "violet", "title": "loader 不管顺序", "items": ["配置列表只决定装什么", "启动先后由 inject 表达", "依赖消失即卸载,恢复即重激活"] },
+    { "dot": "amber", "title": "注册即可撤销", "items": ["ctx.on/provide/effect 全登记 disposer", "卸载沿 fiber 树逆序回退", "热更新不留旧监听器/僵尸进程"] },
+    { "dot": "rose", "title": "Effect 清理机制", "items": ["登记什么,就附带登记怎么撤销", "dispose() 二次调用是 no-op", "disposables.splice(0).reverse() 逆序清理"] }
+  ]
+}

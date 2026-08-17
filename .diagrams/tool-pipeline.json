@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "工具执行的三道关口:tool/call 到 tool/result",
+    "quality_profile": "showcase",
+    "viewBox": [1080, 580]
+  },
+  "participants": [
+    { "id": "model", "type": "external", "label": "模型" },
+    { "id": "runtime", "type": "backend", "label": "tools runtime" },
+    { "id": "gate", "type": "backend", "label": "权限/审批插件" },
+    { "id": "sandbox", "type": "cloud", "label": "沙箱 provider" },
+    { "id": "post", "type": "backend", "label": "截断/限额插件" },
+    { "id": "log", "type": "database", "label": "会话日志" }
+  ],
+  "messages": [
+    { "from": "model", "to": "runtime", "y": 170, "label": "模型发起 tool/call", "variant": "emphasis", "note": "tool/call 事件先写入会话日志:模型可见即事实" },
+    { "from": "runtime", "to": "gate", "y": 218, "label": "第一站 tools/pre-execute:权限检查 + 人工审批", "variant": "emphasis", "note": "拒绝 = 不调 next(),链条截断,副作用不发生" },
+    { "from": "gate", "to": "runtime", "y": 266, "label": "放行 next()", "variant": "return" },
+    { "from": "runtime", "to": "sandbox", "y": 314, "label": "第二站 tools/execute:包上沙箱约束真实执行", "variant": "emphasis", "note": "超时守卫在此换 signal;自己定时器触发则回 TOOL_TIMEOUT" },
+    { "from": "sandbox", "to": "runtime", "y": 362, "label": "原始结果", "variant": "return" },
+    { "from": "runtime", "to": "post", "y": 410, "label": "第三站 tools/post-execute:截断 / 限额 / 脱敏", "variant": "emphasis" },
+    { "from": "post", "to": "runtime", "y": 458, "label": "规范化结果(限额连包装一并计算)", "variant": "return" },
+    { "from": "runtime", "to": "model", "y": 490, "label": "tool/result 落盘 → 回模型,进入下一 Step", "variant": "return" }
+  ],
+  "activations": [
+    { "participant": "runtime", "from": 170, "to": 490 }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "三站全是事件", "items": ["pre 准入 · execute 执行 · post 出口", "执行核心不为策略留开关"] },
+    { "dot": "amber", "title": "可观测", "items": ["在哪被拦/耗时/产出多大都可查", "guard 插件守管道:超时+循环卫生"] },
+    { "dot": "violet", "title": "固定管道", "items": ["解析:确定可见工具+解析参数", "准入:权限/审批+单向保护(只收紧不绕过)", "执行:沙箱内真实执行", "出口:截断/限额/脱敏+输出格式校验"] },
+    { "dot": "rose", "title": "并发与屏障", "items": ["可并发工具进限制并发数量的执行池", "必须独占工具形成屏障", "取消时已启动先结束,未启动补系统结果", "日志顺序与模型调用顺序一致"] }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "能力接缝：三角色定义边界",
+    "quality_profile": "showcase",
+    "viewBox": [1080, 520],
+    "repository": {
+      "url": "https://github.com/deepseek-ai/deepseek-harness",
+      "revision": "47f943859bef60e4160492346772ded9b24f765a"
+    }
+  },
+  "components": [
+    { "id": "def", "type": "backend", "label": "Service Definition", "sublabel": "接口,挂在 ctx 名下", "pos": [60, 115], "size": [180, 60], "tag": "三角色",
+      "sources": [
+        { "path": "packages/shell/shell/src/index.ts", "line": 1, "label": "Service Definition for ctx.shell" }
+      ] },
+    { "id": "provider", "type": "cloud", "label": "Provider", "sublabel": "可插拔实现", "pos": [340, 115], "size": [180, 60], "tag": "三角色" },
+    { "id": "consumer", "type": "frontend", "label": "Consumer", "sublabel": "面向模型的工具", "pos": [620, 115], "size": [180, 60], "tag": "三角色" },
+    { "id": "examples", "type": "external", "label": "示例:shell 接缝", "sublabel": "bash-local/bash-sandbox/pwsh-local/pwsh-sandbox", "pos": [340, 255], "size": [180, 60] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "三角色齐备才算一条缝:定义居中,实现可插拔,使用者只认定义", "wraps": ["def", "provider", "consumer", "examples"] }
+  ],
+  "connections": [
+    { "id": "def-provider", "from": "def", "to": "provider", "label": "实现", "variant": "emphasis", "labelAt": [250, 189] },
+    { "id": "provider-consumer", "from": "provider", "to": "consumer", "label": "使用", "variant": "emphasis", "labelAt": [530, 189] },
+    { "id": "def-examples", "from": "def", "to": "examples", "label": "示例", "variant": "dashed", "labelAt": [250, 249] }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "三角色", "items": ["Definition:接口,挂在 ctx 名下", "Provider:可插拔实现", "Consumer:面向模型的工具"] },
+    { "dot": "violet", "title": "换掉 Provider", "items": ["右侧全部 Consumer 同时切换", "零改动", "本地进程→远程沙箱整体迁移"] },
+    { "dot": "amber", "title": "试金石", "items": ["Provider 列表跨越的世界差异越大", "接口含金量越高", "图就是代码的投影,永不脱节"] }
+  ]
+}

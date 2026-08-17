@@ -1,0 +1,9 @@
+{
+  "name": "deepseek-harness-diagrams",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Offline dependencies for the DeepSeek Harness architecture diagram collection",
+  "dependencies": {
+    "prismjs": "^1.29.0"
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "插件协作模式：接缝/日志/作用域/恢复",
+    "quality_profile": "showcase",
+    "viewBox": [1200, 520],
+    "repository": {
+      "url": "https://github.com/deepseek-ai/deepseek-harness",
+      "revision": "47f943859bef60e4160492346772ded9b24f765a"
+    }
+  },
+  "components": [
+    { "id": "seam", "type": "backend", "label": "能力接缝", "sublabel": "三角色:Definition/Provider/Consumer", "pos": [60, 55], "size": [180, 60], "tag": "协作模式",
+      "sources": [
+        { "path": "packages/shell/shell/src/index.ts", "line": 1, "label": "Service Definition for ctx.shell" }
+      ] },
+    { "id": "log", "type": "database", "label": "会话日志", "sublabel": "只追加,不修改", "pos": [340, 55], "size": [180, 60], "tag": "协作模式",
+      "sources": [
+        { "path": "packages/core/session/src/types.ts", "line": 236, "label": "SessionEventMap 类型注册点" }
+      ] },
+    { "id": "scope", "type": "backend", "label": "作用域", "sublabel": "两层查找+同名遮蔽", "pos": [620, 55], "size": [180, 60], "tag": "协作模式",
+      "sources": [
+        { "path": "packages/core/scope/src/index.ts", "line": 137, "label": "createScope:键是 Agent 对象身份" }
+      ] },
+    { "id": "recovery", "type": "backend", "label": "崩溃恢复", "sublabel": "两种场景", "pos": [900, 55], "size": [180, 60], "tag": "协作模式" },
+    { "id": "seam-detail", "type": "backend", "label": "三角色", "sublabel": "Definition→Provider→Consumer", "pos": [60, 175], "size": [180, 60] },
+    { "id": "log-detail", "type": "backend", "label": "投影", "sublabel": "日志→surface→模型历史", "pos": [340, 175], "size": [180, 60] },
+    { "id": "scope-detail", "type": "backend", "label": "两层", "sublabel": "global 层 vs agent.ctx 层", "pos": [620, 175], "size": [180, 60] },
+    { "id": "recovery-detail", "type": "external", "label": "两场景", "sublabel": "not started vs outcome unknown", "pos": [900, 175], "size": [180, 60] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "四种协作模式:接缝/日志/作用域/恢复", "wraps": ["seam", "log", "scope", "recovery", "seam-detail", "log-detail", "scope-detail", "recovery-detail"] }
+  ],
+  "connections": [
+    { "id": "seam-detail", "from": "seam", "to": "seam-detail", "label": "展开", "variant": "emphasis", "labelAt": [150, 129] },
+    { "id": "log-detail", "from": "log", "to": "log-detail", "label": "展开", "variant": "emphasis", "labelAt": [430, 129] },
+    { "id": "scope-detail", "from": "scope", "to": "scope-detail", "label": "展开", "variant": "emphasis", "labelAt": [710, 129] },
+    { "id": "recovery-detail", "from": "recovery", "to": "recovery-detail", "label": "展开", "variant": "emphasis", "labelAt": [990, 129] }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "能力接缝", "items": ["Definition:接口,挂在 ctx 名下", "Provider:可插拔实现", "Consumer:面向模型的工具", "换掉 Provider,Consumer 零改动"] },
+    { "dot": "violet", "title": "会话日志", "items": ["只追加,不修改", "surface:有效视图(模型可见部分)", "deriveMessages():从日志现算模型历史", "压缩不删旧消息,追加替换记录"] },
+    { "dot": "amber", "title": "作用域", "items": ["两层查找:agent.ctx 优先", "同名遮蔽:专属层挡住全局层", "遮蔽是视角性的,其他 Agent 看到原装"] },
+    { "dot": "rose", "title": "崩溃恢复", "items": ["tool not started:工具未启动,可重试", "tool outcome unknown:不假定失败", "只读/幂等操作才适合直接重跑"] }
+  ]
+}

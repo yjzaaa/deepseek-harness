@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "崩溃恢复：两种场景",
+    "quality_profile": "showcase",
+    "viewBox": [1080, 520],
+    "repository": {
+      "url": "https://github.com/deepseek-ai/deepseek-harness",
+      "revision": "47f943859bef60e4160492346772ded9b24f765a"
+    }
+  },
+  "components": [
+    { "id": "crash", "type": "external", "label": "进程崩溃", "sublabel": "工具执行过程中", "pos": [340, 55], "size": [180, 60], "tag": "崩溃恢复",
+      "sources": [
+        { "path": "packages/guard/timeout-policy/src/index.ts", "line": 55, "label": "超时守卫:换 signal→委托→恢复→改写" }
+      ] },
+    { "id": "notstarted", "type": "backend", "label": "tool not started", "sublabel": "工具未启动,可重试", "pos": [60, 175], "size": [180, 60] },
+    { "id": "unknown", "type": "backend", "label": "tool outcome unknown", "sublabel": "不假定失败,先检查外部状态", "pos": [620, 175], "size": [180, 60] },
+    { "id": "action1", "type": "external", "label": "动作", "sublabel": "模型知道操作没有发生,可重新执行", "pos": [60, 295], "size": [180, 60] },
+    { "id": "action2", "type": "external", "label": "动作", "sublabel": "只读/幂等操作才适合直接重跑", "pos": [620, 295], "size": [180, 60] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "不重复制造副作用:系统不会假定失败,也不会直接重跑", "wraps": ["crash", "notstarted", "unknown", "action1", "action2"] }
+  ],
+  "connections": [
+    { "id": "crash-notstarted", "from": "crash", "to": "notstarted", "label": "场景 1:启动前", "variant": "emphasis", "labelAt": [250, 129] },
+    { "id": "crash-unknown", "from": "crash", "to": "unknown", "label": "场景 2:启动后", "variant": "emphasis", "labelAt": [530, 129] },
+    { "id": "notstarted-action1", "from": "notstarted", "to": "action1", "label": "恢复", "variant": "dashed", "labelAt": [150, 249] },
+    { "id": "unknown-action2", "from": "unknown", "to": "action2", "label": "恢复", "variant": "dashed", "labelAt": [710, 249] }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "场景 1:tool not started", "items": ["进程在工具真正启动以前崩溃", "系统明确记下工具未启动", "模型知道操作没有发生,可重新执行"] },
+    { "dot": "rose", "title": "场景 2:tool outcome unknown", "items": ["日志里已有 tool/call,说明工具开始了", "却没有保存下来的执行结果", "不假定失败,也不直接重跑"] },
+    { "dot": "amber", "title": "恢复原则", "items": ["补上一条 tool outcome unknown", "恢复提示要求模型先检查外部状态", "只读/幂等操作才适合直接重跑"] }
+  ]
+}

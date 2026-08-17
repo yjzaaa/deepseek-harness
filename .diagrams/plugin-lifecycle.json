@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "diagram_type": "lifecycle",
+  "meta": {
+    "title": "插件 fiber 生命周期:注册必须可反向撤销",
+    "quality_profile": "showcase",
+    "viewBox": [1200, 640]
+  },
+  "lanes": [
+    { "id": "main", "label": "fiber 状态轨" },
+    { "id": "effects", "label": "效果记账(ctx)" },
+    { "id": "terminal", "label": "终态" }
+  ],
+  "states": [
+    { "id": "pending", "type": "waiting", "label": "pending", "sublabel": "依赖未齐,不执行 apply", "lane": "main", "col": 0, "width": 110 },
+    { "id": "active", "type": "active", "label": "active", "sublabel": "服务/监听/效果全部登记", "lane": "main", "col": 2, "width": 150 },
+    { "id": "unloading", "type": "decision", "label": "unloading", "sublabel": "依赖消失或配置变更触发", "lane": "main", "col": 4, "width": 130 },
+    { "id": "eff", "type": "neutral", "label": "effect 记账", "sublabel": "ctx.on/provide/effect 各留 disposer", "lane": "effects", "col": 2, "width": 170 },
+    { "id": "disposed", "type": "success", "label": "disposed 干净退场", "sublabel": "逆序撤销,像从未来过", "lane": "terminal", "col": 2, "width": 160 }
+  ],
+  "transitions": [
+    { "from": "pending", "to": "active", "label": "inject 全部依赖出现", "variant": "emphasis" },
+    { "from": "active", "to": "eff", "label": "每次注册都登记撤销函数", "variant": "dashed" },
+    { "from": "active", "to": "unloading", "label": "必需服务消失 / 配置变更", "route": "straight" },
+    { "from": "unloading", "to": "disposed", "label": "逆序撤销 fiber.ts:676", "variant": "emphasis", "route": "right-channel", "fromSide": "right", "toSide": "right", "labelAt": [826, 350] },
+    { "from": "disposed", "to": "pending", "label": "服务恢复 → 重新激活", "variant": "dashed", "route": "left-channel" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "状态由依赖驱动", "items": ["不是靠配置文件的排列顺序", "inject 满足即激活,消失即卸载", "热更新/配置重载不留残渣"] },
+    { "dot": "amber", "title": "撤销成对记账", "items": ["ctx.on/provide/effect 各留 disposer", "disposables.splice(0).reverse()", "仓库门禁:卸载后注册必须消失"] },
+    { "dot": "rose", "title": "崩溃恢复", "items": ["tool not started:工具未启动,可重试", "tool outcome unknown:不假定失败,先检查外部状态", "只读/幂等操作才适合直接重跑"] }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "会话日志：模型可见即可重建",
+    "quality_profile": "showcase",
+    "viewBox": [1080, 520],
+    "repository": {
+      "url": "https://github.com/deepseek-ai/deepseek-harness",
+      "revision": "47f943859bef60e4160492346772ded9b24f765a"
+    }
+  },
+  "components": [
+    { "id": "log", "type": "database", "label": "会话日志", "sublabel": "只追加,不修改", "pos": [60, 115], "size": [180, 60], "tag": "事实来源",
+      "sources": [
+        { "path": "packages/core/session/src/types.ts", "line": 236, "label": "SessionEventMap 类型注册点" }
+      ] },
+    { "id": "surface", "type": "backend", "label": "surface", "sublabel": "有效视图(模型可见部分)", "pos": [340, 115], "size": [180, 60] },
+    { "id": "history", "type": "backend", "label": "模型历史", "sublabel": "deriveMessages() 投影", "pos": [620, 115], "size": [180, 60],
+      "sources": [
+        { "path": "packages/core/session/src/index.ts", "line": 726, "label": "从日志现算模型历史" }
+      ] },
+    { "id": "compress", "type": "backend", "label": "压缩", "sublabel": "追加替换记录,不删旧消息", "pos": [340, 255], "size": [180, 60] },
+    { "id": "views", "type": "external", "label": "其他视图", "sublabel": "界面回放/分叉/持久化/遥测", "pos": [620, 255], "size": [180, 60] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "一份事实,无数视图——事件溯源在 Agent 运行时的完整落地", "wraps": ["log", "surface", "history", "compress", "views"] }
+  ],
+  "connections": [
+    { "id": "log-surface", "from": "log", "to": "surface", "label": "投影", "variant": "emphasis", "labelAt": [250, 189] },
+    { "id": "surface-history", "from": "surface", "to": "history", "label": "deriveMessages()", "variant": "emphasis", "labelAt": [530, 189] },
+    { "id": "log-compress", "from": "log", "to": "compress", "label": "追加替换记录", "variant": "dashed", "labelAt": [250, 249] },
+    { "id": "log-views", "from": "log", "to": "views", "label": "投影", "variant": "dashed", "fromSide": "bottom", "toSide": "bottom", "labelAt": [530, 249] }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "只追加,不修改", "items": ["事件日志承载全部事实", "其余一切都是投影", "模型可见即可重建"] },
+    { "dot": "violet", "title": "Surface 有效视图", "items": ["选出当前应该进入模型上下文的事件", "压缩不删旧消息,追加替换记录", "原始数据保留在日志中"] },
+    { "dot": "amber", "title": "崩溃恢复", "items": ["tool not started:工具未启动,可重试", "tool outcome unknown:不假定失败", "只读/幂等操作才适合直接重跑"] }
+  ]
+}

@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "DeepSeek Harness 底层架构：Cordis 内核与万物皆插件",
+    "quality_profile": "showcase",
+    "viewBox": [1080, 510],
+    "repository": {
+      "url": "https://github.com/deepseek-ai/deepseek-harness",
+      "revision": "47f943859bef60e4160492346772ded9b24f765a"
+    }
+  },
+  "components": [
+    { "id": "cli", "type": "frontend", "label": "apps/cli", "sublabel": "CLI / headless 入口", "pos": [40, 190], "size": [130, 60] },
+    { "id": "webapp", "type": "frontend", "label": "apps/web", "sublabel": "浏览器应用", "pos": [40, 290], "size": [130, 60] },
+    { "id": "plugins", "type": "external", "label": "第三方插件", "sublabel": "dsh-plugin 话题生态", "pos": [220, 55], "size": [150, 60] },
+    { "id": "boot", "type": "backend", "label": "boot/app-boot", "sublabel": "Profile 组装：组合包逐层叠加", "pos": [220, 190], "size": [150, 60],
+      "sources": [
+        { "path": "packages/boot/app-boot/src/profile.ts", "line": 2, "label": "Profile 发现与 patch 层组合" }
+      ] },
+    { "id": "kernel", "type": "backend", "label": "Cordis 内核", "sublabel": "ctx 服务容器 · 类型化事件 · 可逆副作用", "pos": [430, 190], "size": [170, 60], "tag": "vendor",
+      "sources": [
+        { "path": "vendor/cordis/src/context.ts", "line": 42, "label": "class Context：服务容器+事件总线" },
+        { "path": "vendor/cordis/src/service.ts", "line": 11, "label": "abstract class Service：插件基类" },
+        { "path": "vendor/cordis/src/events.ts", "line": 32, "label": "DispatchMode 四种分发" }
+      ] },
+    { "id": "llmseam", "type": "backend", "label": "llm/llm", "sublabel": "模型适配器 seam · 流式词汇表", "pos": [660, 190], "size": [150, 60],
+      "sources": [
+        { "path": "packages/llm/llm/src/index.ts", "line": 64, "label": "llm/stream waterfall 事件声明" },
+        { "path": "packages/llm/llm/src/invariant.ts", "line": 88, "label": "流不变量校验监听器" }
+      ] },
+    { "id": "llmapi", "type": "external", "label": "DeepSeek API 等模型", "sublabel": "外部提供方", "pos": [880, 190], "size": [150, 60] },
+    { "id": "prompt", "type": "backend", "label": "core/system-prompt", "sublabel": "提示词片段 + 工具 schema 组装", "pos": [230, 320], "size": [160, 60],
+      "sources": [
+        { "path": "packages/core/system-prompt/src/index.ts", "line": 2, "label": "有序片段/上下文/schema 注册表" },
+        { "path": "packages/core/system-prompt/src/index.ts", "line": 20, "label": "组装结果的 expert waterfall" }
+      ] },
+    { "id": "tools", "type": "backend", "label": "core/tools", "sublabel": "工具注册表 + pre/execute/post 把关", "pos": [430, 320], "size": [170, 60],
+      "sources": [
+        { "path": "packages/core/tools/src/index.ts", "line": 152, "label": "tools/pre-execute waterfall 声明" },
+        { "path": "packages/core/tools/src/index.ts", "line": 66, "label": "defineTool 导出" }
+      ] },
+    { "id": "agentloop", "type": "backend", "label": "core/agent-loop", "sublabel": "轮次驱动：turn/step 状态机", "pos": [650, 320], "size": [150, 60],
+      "sources": [
+        { "path": "packages/core/agent-loop/src/index.ts", "line": 296, "label": "class AgentLoop extends Service" },
+        { "path": "packages/core/agent-loop/src/agent.ts", "line": 64, "label": "ReactLoopAgent 默认驱动器" },
+        { "path": "packages/core/agent-loop/src/agent.ts", "line": 92, "label": "从日志推导轮次号" }
+      ] },
+    { "id": "seams", "type": "cloud", "label": "能力 seam", "sublabel": "fs / shell / sandbox / subagent 提供方可换", "pos": [300, 425], "size": [200, 60],
+      "sources": [
+        { "path": "docs/capability-seams.md", "line": 1, "label": "seam = 定义/提供方/消费方三角色" }
+      ] },
+    { "id": "session", "type": "database", "label": "core/session", "sublabel": "SessionEvent 仅追加日志", "pos": [650, 425], "size": [150, 60],
+      "sources": [
+        { "path": "packages/core/session/src/index.ts", "line": 2, "label": "事件溯源会话服务：仅追加日志" },
+        { "path": "packages/core/session/src/index.ts", "line": 17, "label": "SessionEventMap 类型注册点" }
+      ] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "一切皆插件：54 个核心包均是插件，注册可逆、可整体替换", "wraps": ["prompt", "tools", "agentloop", "seams", "session"] },
+    { "kind": "security-group", "label": "模型出口", "wraps": ["llmseam", "llmapi"] }
+  ],
+  "connections": [
+    { "id": "cli-boot", "from": "cli", "to": "boot" },
+    { "id": "web-boot", "from": "webapp", "to": "boot" },
+    { "id": "plugins-boot", "from": "plugins", "to": "boot", "label": "组合包 + patch", "variant": "dashed", "labelDy": 24 },
+    { "id": "boot-kernel", "from": "boot", "to": "kernel", "label": "按层叠加插件树", "variant": "emphasis", "labelDy": -20 },
+    { "id": "kernel-prompt", "from": "kernel", "to": "prompt", "label": "ctx.systemPrompt" },
+    { "id": "kernel-tools", "from": "kernel", "to": "tools", "label": "ctx.tools 注册", "labelDy": 24 },
+    { "id": "kernel-agentloop", "from": "kernel", "to": "agentloop", "label": "挂载 ctx.agentLoop" },
+    { "id": "agentloop-llmseam", "from": "agentloop", "to": "llmseam", "label": "agent/request → llm/stream", "variant": "emphasis", "fromSide": "top", "toSide": "bottom" },
+    { "id": "llmseam-llmapi", "from": "llmseam", "to": "llmapi", "label": "HTTPS / SSE", "variant": "emphasis" },
+    { "id": "agentloop-tools", "from": "agentloop", "to": "tools", "label": "tool/call 把关执行", "fromSide": "left", "toSide": "right", "labelDy": 47 },
+    { "id": "agentloop-session", "from": "agentloop", "to": "session", "label": "turn/* · step/* 落盘", "labelDx": 14, "labelDy": 24 },
+    { "id": "tools-seams", "from": "tools", "to": "seams", "label": "经 seam 提供方执行", "variant": "dashed", "fromSide": "bottom", "toSide": "top" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "一切皆插件", "items": ["插件 = inject + apply(ctx)", "无特权内核，扩展=并排挂载", "注册即副作用，卸载即撤销"] },
+    { "dot": "violet", "title": "事件即扩展点", "items": ["emit / waterfall / parallel / serial", "agent/* · tools/* · llm/* 三大事件域", "waterfall 不 next() 即短路"] },
+    { "dot": "amber", "title": "模型可见即已记录", "items": ["会话日志=模型上下文唯一来源", "deriveMessages() 投影模型历史", "fork/恢复/遥测皆派生自事件流"] },
+    { "dot": "rose", "title": "四层结构", "items": ["入口层:Web/CLI/ACP/JSON-RPC", "驱动层:agent-loop(薄,策略在外围)", "能力层:LLM/工具/FS/Shell/子代理", "日志层:会话日志→JSONL/SQLite"] }
+  ]
+}

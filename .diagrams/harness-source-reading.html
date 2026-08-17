@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>DeepSeek Harness 源码解读 — 基于《架构设计》十章 + 仓库实证</title>
+<style>
+:root{--ink:#1c1917;--sub:#78716c;--line:#e7e5e4;--bg:#fafaf9;--accent:#0f766e;--code:#f5f5f4;--warn:#b45309}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.8 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
+main{max-width:60em;margin:0 auto;padding:3em 1.5em 6em}
+h1{font-size:1.9em;margin:0 0 .2em;letter-spacing:-.01em}
+h2{font-size:1.35em;margin:2.6em 0 .5em;padding-top:1.4em;border-top:2px solid var(--ink)}
+h3{font-size:1.05em;margin:1.4em 0 .4em;color:var(--accent)}
+p{margin:.55em 0}
+.kicker{color:var(--accent);font-size:.8em;letter-spacing:.14em;font-weight:600;text-transform:uppercase}
+.sub{color:var(--sub);font-size:.92em}
+code{font:.86em ui-monospace,Consolas,monospace;background:var(--code);padding:.1em .35em;border-radius:4px}
+pre{background:#1c1917;color:#e7e5e4;border-radius:10px;padding:1em 1.2em;overflow-x:auto;font:13px/1.6 ui-monospace,Consolas,monospace}
+pre .cm{color:#8a857f}pre .kw{color:#7dd3fc}pre .st{color:#fbbf24}pre .fn{color:#a5b4fc}
+.src{display:flex;justify-content:space-between;align-items:baseline;background:#292524;color:#d6d3d1;border-radius:10px 10px 0 0;padding:.45em 1em;font-size:.82em;margin-bottom:-1.2em;position:relative;top:.6em}
+.src a{color:#7dd3fc;text-decoration:none;font-family:ui-monospace,Consolas,monospace}
+.src a:hover{text-decoration:underline}
+.fig{border:1px solid var(--line);border-radius:10px;background:#fff;padding:1.2em;margin:1em 0}
+.fig .cap{text-align:center;color:var(--sub);font-size:.85em;margin-top:.8em}
+.row{display:flex;gap:.6em;align-items:center;justify-content:center;flex-wrap:wrap}
+.box{border:1.5px solid var(--ink);border-radius:8px;padding:.5em .9em;font-size:.85em;background:#fff;text-align:center}
+.box.hl{border-color:var(--accent);background:#f0fdfa;font-weight:600}
+.box.dim{border-style:dashed;color:var(--sub)}
+.arrow{color:var(--sub);font-size:1.2em}
+.col{display:flex;flex-direction:column;gap:.5em;align-items:center}
+table{border-collapse:collapse;width:100%;font-size:.9em}
+th,td{border:1px solid var(--line);padding:.45em .7em;text-align:left}
+th{background:#fff}
+.callout{border-left:3px solid var(--accent);background:#f0fdfa;padding:.7em 1em;margin:1em 0;border-radius:0 6px 6px 0;font-size:.93em}
+iframe.diagram{width:100%;height:640px;border:1px solid var(--line);border-radius:10px;background:#fff}
+nav.toc{background:#fff;border:1px solid var(--line);border-radius:10px;padding:1em 1.4em;font-size:.92em;columns:2}
+nav.toc a{color:var(--ink)}
+@media(max-width:760px){nav.toc{columns:1}}
+</style>
+</head>
+<body>
+<main>
+<p class="kicker">源码解读 · 代码与文本对照版</p>
+<h1>DeepSeek Harness 架构设计</h1>
+<p class="sub">基于 it-zhouyu《DeepSeek Harness 架构设计.pdf》(31页/10章) × 仓库实证 deepseek-ai/deepseek-harness @ <code>47f9438</code>(2026-08)。每章 = 书的解读 + 仓库真实代码(可点 file:line 跳进 VS Code) + 原书插图重绘。</p>
+
+<h2 style="border-top:none;padding-top:0">全景:可交互架构图</h2>
+<p class="sub">每个节点带仓库代码证据(sources),点击可查看出处;支持缩放/搜索/主题切换。<a href="harness-architecture.html">单独打开 →</a></p>
+<iframe class="diagram" src="harness-architecture.html" title="架构图"></iframe>
+
+<nav class="toc">
+<strong>目录</strong><br/>
+<a href="#c1">1 · 为什么需要又一个 Agent 运行时</a><br/>
+<a href="#c2">2 · Cordis 插件系统</a><br/>
+<a href="#c3">3 · Waterfall 事件链</a><br/>
+<a href="#c4">4 · 会话日志作为唯一事实来源</a><br/>
+<a href="#c5">5 · Turn 与 Step 执行周期</a><br/>
+<a href="#c6">6 · Capability Seam 能力接缝</a><br/>
+<a href="#c7">7 · 工具执行的三道关口</a><br/>
+<a href="#c8">8 · 作用域与同名遮蔽</a><br/>
+<a href="#c9">9 · 子代理与任务委托</a><br/>
+<a href="#c10">10 · 全景回顾与模式迁移</a>
+</nav>
+
+<!-- ============ 第 1 章 ============ -->
+<h2 id="c1">第 1 章 · 为什么需要又一个 Agent 运行时</h2>
+<p>模型供应商变了、沙箱要换、某类会话要加审批——传统框架里这些都得改核心。dsh 的回答:<strong>全部拆成插件,一个不留</strong>。模型适配器、工具注册表、会话日志、执行循环本身都是插件,没有特权核心可打补丁。</p>
+<p>组合机制两层:<strong>bundle</strong>(一组 Cordis 配置行 + 挂载代码)与 <strong>profile</strong>(若干 bundle 有序叠加 + 用户补丁)。<code>web</code> 与 <code>headless</code> 两个模板共享基础层 <code>dsh-base</code>。任何一行组合配置都可用 <code>--patch</code> 整行替换——用 <code>dsh --profile web --dump-config</code> 打印你机器上真实的插件树。</p>
+<div class="fig">
+  <div class="row" style="justify-content:space-around">
+    <div class="col"><div class="box dim">单体框架</div><div class="box dim">模型适配·工具·会话·循环·策略焊死</div><div class="sub" style="font-size:.8em">改一处动全身</div></div>
+    <div class="arrow">⟶</div>
+    <div class="col"><div class="box hl">一切皆插件</div><div class="row"><div class="box">模型适配</div><div class="box">工具注册</div><div class="box">会话日志</div></div><div class="row"><div class="box">Agent 循环</div><div class="box">沙箱执行</div></div><div class="sub" style="font-size:.8em">共享上下文 Context · 换掉一个盒子不影响其余</div></div>
+  </div>
+  <p class="cap">图 1-1 单体把功能焊死;插件化让每个部件可单独替换</p>
+</div>
+<p class="sub">仓库实证:54 个包按组组织——core 组是产品主线,llm 组放模型能力,shell/fs/lsp/terminal 各对应执行环境,subagent/workflow/skill 是协作能力,vendor/ 下锁住 Cordis 上游版本。</p>
+
+<!-- ============ 第 2 章 ============ -->
+<h2 id="c2">第 2 章 · Cordis 插件系统</h2>
+<p>核心主张一句话:<strong>插件向共享上下文贡献服务、类型化事件和可撤销的效果</strong>。三个关键:</p>
+<ul>
+<li><strong>ctx = 按名字索引的服务注册表</strong>:<code>ctx.llm</code> / <code>ctx.tools</code> / <code>ctx.sessions</code>;插件间不 import 实例,都经 ctx 中转。</li>
+<li><strong>事件类型编译期可查</strong>(TS 声明合并挂在服务接口上)。</li>
+<li><strong>可撤销的效果</strong>:一切注册经 <code>ctx.effect()</code> 登记,卸载时逆序回退——仓库门禁甚至要求每个包证明卸载后注册确实被移除。</li>
+</ul>
+
+<div class="src"><span>插件基类:注册即随 fiber 自动注销</span><a href="vscode://file/D:/AI-Projects/deepseek-harness/vendor/cordis/src/service.ts:42">vendor/cordis/src/service.ts:42 ↗</a></div>
+<pre>export abstract class <span class="kw">Service</span>&lt;out T = never&gt; {
+  <span class="cm">// Subclasses call super(ctx, name) from their constructor. The service is</span>
+  <span class="cm">// registered immediately and is automatically removed with the owning fiber.</span>
+  constructor(protected ctx: Context, name: string) {
+    <span class="cm">// ctx.reflect.provide(name, this, this[Service.check]) —</span>
+    <span class="cm">// 服务在所属 fiber 卸载时自动从注册表消失</span>
+  }</pre>
+
+<div class="src"><span>Context 是一个 Proxy:属性读取走服务解析器</span><a href="vscode://file/D:/AI-Projects/deepseek-harness/vendor/cordis/src/context.ts:42">vendor/cordis/src/context.ts:42 ↗</a></div>
+<pre>export class <span class="kw">Context</span> {
+  <span class="cm">// normal property reads go through the service resolver, while</span>
+  <span class="cm">// extend(), isolate(), and intercept() create scoped child contexts</span>
+  constructor() {
+    <span class="kw">const</span> self = <span class="kw">new</span> Proxy&lt;this&gt;(this, ReflectService.handler)
+    this.fiber    = <span class="kw">new</span> Fiber(self, {}, Object.create(null), null, () =&gt; [])
+    this.reflect  = <span class="kw">new</span> ReflectService(self)
+    this.registry = <span class="kw">new</span> RegistryService(self)
+    this.events   = <span class="kw">new</span> EventsService(self)
+    <span class="kw">return</span> self
+  }</pre>
+
+<div class="fig">
+  <div class="row"><div class="box hl">插件 apply(ctx)</div><div class="arrow">→</div><div class="box">注册服务 ctx.llm/ctx.tools</div><div class="box">监听事件 ctx.on(...)</div><div class="box">登记效果 ctx.effect(...)</div><div class="arrow">→</div><div class="box hl">运行中的组合体</div></div>
+  <div class="row" style="margin-top:.7em"><div class="box dim">卸载插件 fiber dispose</div><div class="arrow">→</div><div class="box dim">逆序撤销:注销服务、退订事件</div><div class="box dim">替换/热更新,不留残渣</div></div>
+  <p class="cap">图 2-1 每次注册都是一笔可撤销的效果,卸载时按登记逆序回退</p>
+</div>
+<div class="callout">配置纪律:<strong>配错要当场大声失败</strong>,静默跳过缺失引用被禁止。强依赖写进 <code>inject</code> 声明;可缺失的服务用查询式获取,插件自己决定降级。</div>
+
+<!-- ============ 第 3 章 ============ -->
+<h2 id="c3">第 3 章 · Waterfall 事件链</h2>
+<p>四种分发模式对应四种协作形态:<code>emit</code> 观察 / <code>parallel</code> 并发 / <code>serial</code> 顺序带值 / <code>waterfall</code> 层层加工(洋葱圈中间件)。dsh 最倚重 waterfall——权限检查、请求改写、压缩裁剪,全是中间件需求。</p>
+
+<div class="src"><span>分发模式是事件的公开约定</span><a href="vscode://file/D:/AI-Projects/deepseek-harness/vendor/cordis/src/events.ts:32">vendor/cordis/src/events.ts:32 ↗</a></div>
+<pre>export type <span class="kw">DispatchMode</span> = <span class="st">'emit'</span> | <span class="st">'parallel'</span> | <span class="st">'serial'</span> | <span class="st">'bail'</span> | <span class="st">'waterfall'</span>
+
+<span class="cm">// 监听者收到 (...args, next):调 next() 委托下游,返回值沿原路传回;</span>
+<span class="cm">// 不调 next() 直接返回 = 短路(策略插件的拦截权)</span>
+waterfall&lt;K extends keyof Events&gt;(name: K, ...args: Parameters&lt;Events[K]&gt;): ReturnType&lt;Events[K]&gt;</pre>
+
+<div class="src"><span>类型化事件通过声明合并挂在服务接口上(编译期可查)</span><a href="vscode://file/D:/AI-Projects/deepseek-harness/packages/llm/llm/src/index.ts:64">packages/llm/llm/src/index.ts:64 ↗</a></div>
+<pre><span class="cm">// @mode waterfall —— 包裹每一次发往模型的流式请求</span>
+<span class="st">'llm/stream'</span>(this: LlmRuntime, options: GenerateOptions,
+             next: () =&gt; AsyncIterable&lt;StreamChunk&gt;): AsyncIterable&lt;StreamChunk&gt;</pre>
+
+<div class="fig">
+  <div class="row"><div class="box hl">请求</div><div class="arrow">→</div><div class="box">插件 A 权限检查</div><div class="arrow">→</div><div class="box">插件 B 改写内容</div><div class="arrow">→</div><div class="box">插件 C 记录遥测</div><div class="arrow">→</div><div class="box hl">核心执行</div></div>
+  <div class="row" style="margin-top:.6em"><div class="sub" style="font-size:.85em">返回值沿 C→B→A 原路传回,每一环都能加工;某一环不调 next() 链条即截断,请求到不了核心</div></div>
+  <p class="cap">图 3-1 请求沿链条传递给核心,任何一环都能改写或截断</p>
+</div>
+<p>实际事件表里 waterfall 承担的主管道:<code>agent/request</code>(包裹发往模型的请求,权限策略在这行动)、<code>agent/pre-step</code>(决定模型看到什么,可改写可拒绝)、<code>llm/stream</code>(包裹流式响应)、<code>tools/*</code> 三站(第 7 章)。硬性约定:<strong>监听者必须调用 next() 完成委托</strong>,忘了调链就停在你手里。</p>
+<div class="callout">排查路径是明确的:某请求为什么被改写 → 先看插件树排列顺序(注册顺序=链条顺序),再逐个看 waterfall 监听者做了什么。</div>
+
+<!-- ============ 第 4 章 ============ -->
+<h2 id="c4">第 4 章 · 会话日志作为唯一事实来源</h2>
+<p>整个会话只有一份权威记录:<strong>只追加、不修改的事件日志</strong>,其余一切都是它的投影。纪律:<strong>模型可见即可重建</strong>——到达模型请求的一切必须能从日志重建,运行时有断言持续检查,违背就报错。机制维护纪律,不靠文档。</p>
+
+<div class="src"><span>事件表:类型集中声明,负载字段逐个写明</span><a href="vscode://file/D:/AI-Projects/deepseek-harness/packages/core/session/src/types.ts:236">packages/core/session/src/types.ts:236 ↗</a></div>
+<pre>export interface <span class="kw">SessionEventMap</span> {
+  <span class="st">'turn/start'</span>: { turn: number }            <span class="cm">// 认领输入前开启;被拒也记录</span>
+  <span class="st">'turn/end'</span>:   { turn: number; reason: TurnEndReason }
+  <span class="st">'step/start'</span>: { turn: number; step: number }  <span class="cm">// 一次模型调用+其工具执行</span>
+  <span class="st">'step/end'</span>:   { turn: number; step: number }
+  <span class="st">'user/message'</span>: UserMessage               <span class="cm">// 人类输入/注入上下文/目标续跑</span>
+  <span class="st">'assistant/chunk'</span>: { turn: number; step: number; chunk: StreamChunk }  <span class="cm">// 原始流分片,回放保真</span>
+  <span class="cm">// 'assistant/message' / 'tool/call' / 'tool/result' …</span>
+}</pre>
+
+<div class="src"><span>模型历史从日志现算,内存不维护第二手状态</span><a href="vscode://file/D:/AI-Projects/deepseek-harness/packages/core/session/src/index.ts:726">packages/core/session/src/index.ts:726 ↗</a></div>
+<pre>deriveMessages(): Message[] {
+  <span class="cm">// 增量投影:surface.replaceGeneration 变了就重算;新增事件逐条投影。</span>
+  <span class="cm">// 返回的 Message 对象共享且 deep-frozen——消费方无法篡改日志。</span>
+  <span class="kw">for</span> (<span class="kw">const</span> seq of nodes.slice(this.derivedNodes)) {
+    <span class="kw">const</span> msg = this.deriveEventMessage(this.log[seq]!)
+    <span class="kw">if</span> (msg) this.derived.push(msg)
+  }</pre>
+
+<div class="fig">
+  <div class="row"><div class="box hl">会话日志(只追加)</div></div>
+  <div class="row" style="margin:.4em 0"><div class="box">turn/start</div><div class="box">user/message</div><div class="box">assistant/message</div><div class="box">tool/call</div><div class="box">tool/result</div><div class="box">turn/end</div></div>
+  <div class="arrow">↓ 投影</div>
+  <div class="row"><div class="box">模型历史 deriveMessages()</div><div class="box">界面回放</div><div class="box">会话分叉 fork</div><div class="box">持久化 JSONL/SQLite</div><div class="box">遥测统计</div></div>
+  <p class="cap">图 4-1 一份事实,无数视图——事件溯源在 Agent 运行时的完整落地</p>
+</div>
+<div class="callout">连遗忘也是事实:上下文压缩的结果作为一种事件记入日志,模型历史投影按最新一次压缩生效。快照测试把模型挡在假适配器后,事件流因此确定可断言。</div>
+
+<!-- ============ 第 5 章 ============ -->
+<h2 id="c5">第 5 章 · Turn 与 Step 执行周期</h2>
+<p><strong>Step = 一次模型请求 + 它引发的全部工具调用;Turn = 零或多个 Step</strong>,在首份输入被认领前开启,不再欠回复时关闭。所有输入(界面/CLI/程序调用)进同一个收件箱排队;注入的上下文安静等待,下一条消息把它们一起带走——什么时候值得花一次模型调用,固化在收件箱语义里。</p>
+
+<div class="src"><span>Agent 出生:收件箱、轮次号从日志推导、专属作用域</span><a href="vscode://file/D:/AI-Projects/deepseek-harness/packages/core/agent-loop/src/agent.ts:84">packages/core/agent-loop/src/agent.ts:84 ↗</a></div>
+<pre>constructor(public readonly session: Session) {
+  this.inbox = <span class="kw">new</span> Inbox(session, {
+    inserted: (m) =&gt; this.dispatch.emit(<span class="st">'agent/inbox/inserted'</span>, { message: m }),
+    claimed:  (m, turn) =&gt; this.dispatch.emit(<span class="st">'agent/inbox/claimed'</span>, { message: m, turn }),
+  })
+  <span class="cm">// 轮次号不从内存读——从日志里最后一个 turn/start 推导(重启可续)</span>
+  <span class="kw">const</span> lastTurn = session.events.findLast(e =&gt; e.type === <span class="st">'turn/start'</span>)?.data.turn ?? 0
+  this.phase = { kind: <span class="st">'idle'</span>, lastTurn }
+  this.scope = createScope(loopCtx, this)            <span class="cm">// 第 8 章:专属层</span>
+  this.ctx = this.scope.ctx.extend({ agent: this })
+}</pre>
+
+<div class="fig">
+  <div class="col">
+    <div class="box hl">turn/start · 认领输入,装配提示与工具表</div>
+    <div class="arrow">↓ 循环 0..n 次</div>
+    <div class="row"><div class="box">step/start</div><div class="arrow">→</div><div class="box">模型请求 agent/request → llm/stream</div><div class="arrow">→</div><div class="box">工具 tools/pre→execute→post</div><div class="arrow">→</div><div class="box">结果入日志 step/end</div></div>
+    <div class="arrow">↓ 不再欠回复</div>
+    <div class="box hl">agent/turn-stopping(serial 投票) → turn/end</div>
+  </div>
+  <p class="cap">图 5-1 一个 Turn 内含零或多个 Step;即使首轮被拒,空 Turn 也记入日志(拒绝也是历史)</p>
+</div>
+<p>分层:Turn/Step 开合是<strong>耐久事件</strong>进日志;请求/流式/工具中转是<strong>运行时事件</strong>挂 waterfall。日志负责事实,事件链负责策略,互不越界。取消与出错同样嵌在周期里:已发生部分照实入日志,回合体面收口,内存里不留日志之外的半途状态。</p>
+
+<!-- ============ 第 6 章 ============ -->
+<h2 id="c6">第 6 章 · Capability Seam 能力接缝</h2>
+<p>每种能力 = 三角色齐备才算一条缝:<strong>Service Definition</strong>(接口,挂在 ctx 名下)+ <strong>Service Provider</strong>(可插拔实现)+ <strong>Consumer</strong>(通常是面向模型的工具)。只有一个角色的包不构成接缝。</p>
+
+<div class="src"><span>shell 接缝的 Service Definition——注释里就写死了组合纪律</span><a href="vscode://file/D:/AI-Projects/deepseek-harness/packages/shell/shell/src/index.ts:1">packages/shell/shell/src/index.ts:1 ↗</a></div>
+<pre><span class="cm">/** Service Definition for the `ctx.shell` capability seam …
+ *  a host composes exactly one provider of `ctx.shell` (the win32 layer swaps
+ *  the POSIX rows for the pwsh ones, and mounting both fails loud on a
+ *  duplicate service registration) */</span>
+<span class="cm">// 定义方拥有 settings 命名空间,因为它命名的是能力而非实现</span>
+export const SHELL_SETTINGS_NAMESPACE = settingsNamespace(<span class="st">'shell'</span>)</pre>
+
+<div class="fig">
+  <div class="row">
+    <div class="col"><div class="box hl">Service Definition<br/><span class="sub" style="font-size:.85em">ctx.shell 接口</span></div></div>
+    <div class="col">
+      <div class="row"><div class="box">Provider: bash-local</div><div class="box">Provider: bash-sandbox</div></div>
+      <div class="arrow">↑ 换掉任一 Provider ↓</div>
+      <div class="row"><div class="box">Consumer: Bash 工具</div><div class="box">Consumer: PTY 终端</div><div class="box">Consumer: LSP</div></div>
+    </div>
+  </div>
+  <p class="cap">图 6-1 定义居中、实现可插拔、使用者只认定义——换掉左侧 Provider,右侧全部 Consumer 同时切换,零改动</p>
+</div>
+<p>仓库实证(<code>packages/shell/</code>):<code>shell</code>(定义)+ <code>bash-local</code> / <code>bash-sandbox</code> / <code>pwsh-local</code> / <code>pwsh-sandbox</code>(四个 Provider)+ <code>tool-bash</code> / <code>tool-pwsh</code>(Consumer)。fs 与 subprocess 共享执行世界——两者 Provider 一起指向远程沙箱,Bash/终端/LSP 整体搬进沙箱,无一需要单独适配。</p>
+<div class="callout">试金石:Provider 列表跨越的世界差异越大(本地进程→远程沙箱;进程内→别家产品),接口含金量越高。文档站的接缝全景图由脚本从代码推导——<strong>图就是代码的投影</strong>,永不脱节。</div>
+
+<!-- ============ 第 7 章 ============ -->
+<h2 id="c7">第 7 章 · 工具执行的三道关口</h2>
+<p>模型说"我要执行这条命令"之后的路程,被做成三个 waterfall 站点的管道,任何插件都能在任何站点介入:</p>
+
+<div class="src"><span>三站全部以声明合并定义,@mode 标注分发模式</span><a href="vscode://file/D:/AI-Projects/deepseek-harness/packages/core/tools/src/index.ts:152">packages/core/tools/src/index.ts:152 ↗</a></div>
+<pre><span class="cm">// 第一站·准入:权限/审批,拒绝 = 不调 next()</span>
+<span class="st">'tools/pre-execute'</span>(this: Scoped&lt;ToolRuntime&gt;, exec: ToolExecution,
+                    next: () =&gt; Promise&lt;PreToolDecision&gt;): Promise&lt;PreToolDecision&gt;
+<span class="cm">// 第二站·执行:超时/重试/指标;registry 重接 caller signal,替换不能断开取消</span>
+<span class="st">'tools/execute'</span>(this: Scoped&lt;ToolRuntime&gt;, exec: ToolDispatchExecution,
+                next: () =&gt; Promise&lt;ToolExecutionResult&gt;): Promise&lt;ToolExecutionResult&gt;
+<span class="cm">// 第三站·出口:截断/限额/脱敏——限额施加在完整产出上,连包装一并计算</span>
+<span class="st">'tools/post-execute'</span>(this: Scoped&lt;ToolRuntime&gt;, exec: ToolExecution,
+                     result: ToolExecutionResult, next: …): …</pre>
+
+<div class="fig">
+  <div class="row"><div class="box">模型发出 tool/call(先落日志)</div><div class="arrow">→</div><div class="box hl">pre-execute<br/><span class="sub" style="font-size:.8em">权限与审批</span></div><div class="arrow">→</div><div class="box hl">execute<br/><span class="sub" style="font-size:.8em">沙箱内真实执行+超时守卫</span></div><div class="arrow">→</div><div class="box hl">post-execute<br/><span class="sub" style="font-size:.8em">截断与限额</span></div><div class="arrow">→</div><div class="box">tool/result 入日志,回模型</div></div>
+  <p class="cap">图 7-1 三站全是事件,策略全是插件;执行核心不为任何具体策略留开关</p>
+</div>
+<p>守卫插件(<code>packages/guard</code>)守这条管道:工具超时(到时体面终止并记因)、循环卫生(识别重复调用同一工具/空转不产出并干预)。三站都是事件 → 一次调用在哪被拦、耗时多少、产出多大,读日志事件序列就够。</p>
+
+<!-- ============ 第 8 章 ============ -->
+<h2 id="c8">第 8 章 · 作用域与同名遮蔽</h2>
+<p>同进程多个 Agent 共享全局注册表,又各自需要定制。机制只有两层 + 一条规则:<strong>专属层(agent.ctx)优先查找,同名遮蔽全局层;遮蔽是视角性的,其他 Agent 看到的仍是原装</strong>。</p>
+
+<div class="src"><span>作用域原语:键是不透明对象身份(直接用 Agent 对象),只做身份比较</span><a href="vscode://file/D:/AI-Projects/deepseek-harness/packages/core/scope/src/index.ts:137">packages/core/scope/src/index.ts:137 ↗</a></div>
+<pre>export function <span class="fn">createScope</span>(ctx: Context, key: ScopeKey, options?): Scope {
+  <span class="kw">const</span> fiber = ctx.plugin(scope)
+  <span class="kw">const</span> scoped: Context = fiber.ctx.extend({ [kScope]: key })
+  <span class="kw">return</span> { ctx: scoped, rawDispose: fiber.dispose,
+           dispose: () =&gt; (disposing ??= quiesceFiber(fiber)) }
+}
+<span class="cm">// scopeTarget():事件沿作用域链向上流动——外层组合能观察其下每个 Agent,</span>
+<span class="cm">// 低于分发键的标记被排除:events flow up the chain, never down.</span></pre>
+
+<div class="fig">
+  <div class="row">
+    <div class="col"><div class="box hl">global 全局注册</div><div class="box">工具 A · 工具 B · 服务 X</div></div>
+    <div class="arrow">◀ 就近查找</div>
+    <div class="col"><div class="box hl">agent.ctx 专属作用域</div><div class="box">工具 A*(遮蔽) · 工具 C</div></div>
+  </div>
+  <p class="cap">图 8-1 专属注册先被看见,同名全局注册被挡在后面,其余照常可用</p>
+</div>
+<p>一致性红利:系统提示分节、会话标题、命令面板——凡挂在注册表上的都遵守同一套两层查找。<strong>preset</strong>(预设)= 声明 Agent 由哪些插件构成的组合配置;标 <code>isolate</code> 则为该 Agent 单独立服务实例。克制点:只有两层,没有更深嵌套——机制给到刚好,多余自由度不给。</p>
+
+<!-- ============ 第 9 章 ============ -->
+<h2 id="c9">第 9 章 · 子代理与任务委托</h2>
+<p>委托被做成能力接缝 <code>ctx.subagents</code>:一个接口 + 形态悬殊的 Provider。与 shell 单执行者不同,它允许<strong>多 Provider 同时注册、按名选用</strong>——委托的世界天然多元。</p>
+
+<div class="src"><span>能力核对:启动前逐项验证,不支持当场报错,绝不悄悄降级</span><a href="vscode://file/D:/AI-Projects/deepseek-harness/packages/subagent/subagent/src/types.ts:86">packages/subagent/subagent/src/types.ts:86 ↗</a></div>
+<pre>export interface <span class="kw">SubagentCapabilities</span> {           <span class="cm">// Provider 自报能力</span>
+  readonly outputSchema: boolean
+  readonly depthLimit: boolean                  <span class="cm">// 委托深度上限,防无限套娃</span>
+  readonly toolFilter: boolean                  <span class="cm">// 子代理工具集=父代理划定子集</span>
+  readonly persona: boolean
+}
+export interface <span class="kw">SubagentStartRequest</span> {
+  readonly prompt: ContentBlock[]
+  readonly parent: Agent                        <span class="cm">// 谱系与深度由此推导</span>
+  readonly signal: AbortSignal                  <span class="cm">// 启动前后统一的取消通道</span>
+  readonly outputSchema?: ObjectJsonSchema      <span class="cm">// 不支持就拒绝,不降级</span>
+}</pre>
+
+<div class="fig">
+  <div class="row">
+    <div class="box hl">主 Agent<br/><span class="sub" style="font-size:.8em">把任务拆出去</span></div>
+    <div class="arrow">→ 委托</div>
+    <div class="col">
+      <div class="box">进程内子代理(同进程出生,共享执行世界)</div>
+      <div class="box">fork 副本(从当前日志分叉,带前文干活)</div>
+      <div class="box">外部产品代理(ACP 远程委托另一套 harness)</div>
+    </div>
+  </div>
+  <p class="cap">图 9-1 一个委托接口,三种相差悬殊的实现——把别家 Agent 当外设,是接缝能走到的最远处</p>
+</div>
+<p class="sub">仓库实证(<code>packages/subagent/</code>):<code>subagent</code>(定义)+ <code>subagent-fork-in-process</code> / <code>subagent-spawn-in-process</code> / <code>subagent-acp</code> / <code>subagent-claude-code</code> / <code>subagent-codex</code>(Provider)+ <code>tool-subagent</code>(面向模型的委托工具)。回报通道:子代理长任务里可经专属回报工具把阶段进展送回父代理收件箱——多代理失控的裂缝通常是父代理对飞行中的孩子一无所知。</p>
+
+<!-- ============ 第 10 章 ============ -->
+<h2 id="c10">第 10 章 · 全景回顾与模式迁移</h2>
+<div class="fig">
+  <div class="col" style="align-items:stretch;text-align:center">
+    <div class="box hl">入口层:Web 应用 · 终端 CLI · ACP 自动化 · JSON-RPC(都进同一收件箱)</div>
+    <div class="box">驱动层:agent-loop(Turn/Step 循环,本身薄得惊人——策略全在外围事件上)</div>
+    <div class="box">能力层(全部插件):LLM 适配 · 工具 · 文件系统 · Shell · 子代理 · 技能 · 工作流 · 压缩</div>
+    <div class="box hl">日志层:会话日志(一切模型可见内容的来源) → 持久化 JSONL/SQLite</div>
+    <div class="sub" style="font-size:.85em">侧面贯穿:权限 · 沙箱 · 审批 · 超时(三道关口值守)</div>
+  </div>
+  <p class="cap">图 10-1 四层结构;没有一个方块是特殊的,包括画在中间的 agent-loop</p>
+</div>
+<h3>只能带走三件事</h3>
+<ol>
+<li><strong>把事实和推导分开</strong>:只追加事件日志承载全部事实,其余皆投影;把纪律做成运行时断言——文档约束会松,机制约束不会。</li>
+<li><strong>用三角色定义能力边界</strong>:接口/实现/使用方各归其位;接缝三角色齐备才算数。</li>
+<li><strong>让扩展发生在事件上而非核心里</strong>:if 配置越积越多的地方,多半缺一条 waterfall 链。</li>
+</ol>
+<p>另两条小模式:注册即效果(登记与撤销成对记账);作用域两层加遮蔽(最小机制满足按身份定制)。</p>
+<div class="callout"><strong>动手路径</strong>:① 跑一次 headless 感受最小组合 → ② <code>--dump-config</code> 打印插件树,把图 10-1 和你机器上真实的树对号 → ③ 挑一条缝读三个包(推荐 shell,最小最完整) → ④ 写一个监听 <code>agent/request</code> 的插件,给每次请求打一行日志,体会注册即效果的回退。</div>
+
+<hr style="margin:3em 0;border:none;border-top:1px solid var(--line)"/>
+<p class="sub">来源:书=it-zhouyu/book《DeepSeek Harness架构设计.pdf》(2026-08);代码=deepseek-ai/deepseek-harness @ 47f9438(本地 D:\AI-Projects\deepseek-harness)。交互架构图:<a href="harness-architecture.html">harness-architecture.html</a>(archify 交付,showcase 校验通过)。</p>
+</main>
+</body>
+</html>

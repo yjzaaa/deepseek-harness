@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "全景回顾：插件树决定是谁，事件日志决定经历过什么",
+    "quality_profile": "showcase",
+    "viewBox": [1080, 520],
+    "repository": {
+      "url": "https://github.com/deepseek-ai/deepseek-harness",
+      "revision": "47f943859bef60e4160492346772ded9b24f765a"
+    }
+  },
+  "components": [
+    { "id": "entry", "type": "frontend", "label": "入口层", "sublabel": "Web/CLI/ACP/JSON-RPC(都进同一收件箱)", "pos": [340, 55], "size": [400, 60], "tag": "四层" },
+    { "id": "loop", "type": "backend", "label": "驱动层", "sublabel": "agent-loop(Turn/Step 循环,本身薄得惊人)", "pos": [340, 175], "size": [400, 60], "tag": "四层",
+      "sources": [
+        { "path": "packages/core/agent-loop/src/agent.ts", "line": 84, "label": "Agent 出生:收件箱/轮次号/作用域" }
+      ] },
+    { "id": "capability", "type": "cloud", "label": "能力层", "sublabel": "LLM/工具/FS/Shell/子代理/技能/工作流/压缩(全部插件)", "pos": [340, 295], "size": [400, 60], "tag": "四层" },
+    { "id": "log", "type": "database", "label": "日志层", "sublabel": "会话日志(一切模型可见内容的来源)→JSONL/SQLite", "pos": [340, 415], "size": [400, 60], "tag": "四层",
+      "sources": [
+        { "path": "packages/core/session/src/types.ts", "line": 236, "label": "SessionEventMap 类型注册点" }
+      ] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "没有一个方块是特殊的,包括画在中间的 agent-loop", "wraps": ["entry", "loop", "capability", "log"] }
+  ],
+  "connections": [
+    { "id": "entry-loop", "from": "entry", "to": "loop", "label": "统一收件箱", "variant": "emphasis", "labelAt": [540, 129] },
+    { "id": "loop-capability", "from": "loop", "to": "capability", "label": "调用能力", "variant": "emphasis", "labelAt": [540, 249] }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "四层结构", "items": ["入口层:Web/CLI/ACP/JSON-RPC", "驱动层:agent-loop(薄,策略在外围)", "能力层:LLM/工具/FS/Shell/子代理", "日志层:会话日志→JSONL/SQLite"] },
+    { "dot": "violet", "title": "只能带走三件事", "items": ["把事实和推导分开:日志承载事实,其余皆投影", "用三角色定义能力边界:接口/实现/使用方", "让扩展发生在事件上而非核心里"] },
+    { "dot": "amber", "title": "为什么长成运行时", "items": ["能力由谁提供?插件从何时生效?", "副作用有没有发生?模型实际看见过什么?", "系统崩溃后还能相信哪些事实?"] },
+    { "dot": "rose", "title": "两点回答", "items": ["插件树决定这个 agent 是谁、拥有什么", "事件日志决定它经历过什么、接下来还能安全地做什么"] }
+  ]
+}
