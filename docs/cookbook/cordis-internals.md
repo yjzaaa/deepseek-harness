@@ -6,7 +6,7 @@ English | [中文](cordis-internals.zh.md)
 >
 > 基于 `vendor/cordis/src/` 源码，聚焦 Context Proxy、Fiber 状态机、服务解析、inject 依赖跟踪和 effect 生命周期五个核心机制。
 >
-> 配套动画图集（位于仓库外层目录，不在本仓库内）：`../diagrams/cordis-core/cordis-core-animated.html`（相对仓库根向上一级），单文件、可离线直接用浏览器打开，含双主题与分步播放动画。
+> 配套动画图集：[Cordis 核心机制动画图集](../../.diagrams/cordis-core-animated.html)，单文件、可离线直接用浏览器打开，含双主题与分步播放动画。
 
 ---
 

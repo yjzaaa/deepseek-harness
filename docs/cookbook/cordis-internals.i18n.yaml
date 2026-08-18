@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/cookbook/cordis-internals.md
-cordis-internals.md: a4b6fcff0c1f07e6a0f67f0ecb42c850717d988a
-cordis-internals.zh.md: 199e3cf1ee4d3af11e94d48a5551d7c91d3946db
+cordis-internals.md: 136859ad7259b407b3865e70e7503b42397d6b80
+cordis-internals.zh.md: 91aaf0454a3810d346ba352215928a1413e731bd
